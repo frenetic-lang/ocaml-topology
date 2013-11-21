@@ -25,9 +25,11 @@ let string_of_rate r =
 
 module type NODE =
 sig
-  type t = Host of string * addrMAC * addrIP
-           | Switch of string * switchId
-           | Mbox of string * string list
+  type t = 
+    | Host of string * addrMAC * addrIP
+    | Switch of string * switchId
+    | Mbox of string * string list
+
   type label = t
 
   val equal : t -> t -> bool
