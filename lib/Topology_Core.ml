@@ -396,7 +396,7 @@ struct
             else 
               try 
                 let l = find_edge g nodes.(i) nodes.(j) in
-                (Some (VInt.get_int (Link.cost l)), [nodes.(i); nodes.(j)])
+                (Some (VInt.get_int16 (Link.cost l)), [nodes.(i); nodes.(j)])
             with Not_found -> 
               (None,[]))) in
     let matrix = make_matrix g in
