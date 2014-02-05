@@ -32,3 +32,13 @@ Executable otopo
     packet,
     topology
   Install: False
+
+Executable speed
+  Path: exe
+  MainIs: speed.ml
+  CompiledObject: native
+  BuildDepends:
+    ocamlgraph,
+    packet,
+    topology
+  Install: False
