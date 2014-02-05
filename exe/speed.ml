@@ -172,52 +172,60 @@ let arg_spec =
 
 let usage = Printf.sprintf "usage: %s [--dot|--gml] filename -o filename [--dot|--mn]" Sys.argv.(0)
 
-let persistent_dijkstra (t:Pers.t) : (int * float) =
+let persistent_dijkstra (t:Pers.t) : (int * float * int) =
   let hosts = Pers.get_hosts t in
+  let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _ = Pers.shortest_path_v t src dst in ()
+    if not (src = dst) then let _ = Pers.shortest_path_v t src dst in
+                            times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
-  (List.length hosts, stop -. start)
+  (List.length hosts, stop -. start, !times)
 
-let cached_persistent_dijkstra (t:CachedPers.t) : (int * float) =
+let cached_persistent_dijkstra (t:CachedPers.t) : (int * float * int) =
   let open CachedNode in
   let hosts = CachedPers.fold_vertex (fun v acc -> match v with
       | {hash =  _; data = Node.Host(_)} -> v::acc
       | _ -> acc
     ) t [] in
+  let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _Imp = CachedPers.shortest_path t src dst in ()
+    if not (src = dst) then let _Imp = CachedPers.shortest_path t src dst in
+                            times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
-  (List.length hosts, stop -. start)
+  (List.length hosts, stop -. start, !times)
 
-let cached_imperative_dijkstra (t:CachedImp.t) : (int * float) =
+let cached_imperative_dijkstra (t:CachedImp.t) : (int * float * int) =
   let open CachedNode in
   let hosts = CachedImp.fold_vertex (fun v acc -> match v with
       | {hash =  _; data = Node.Host(_)} -> v::acc
       | _ -> acc
     ) t [] in
+  let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _Imp = CachedImp.shortest_path t src dst in ()
+    if not (src = dst) then let _Imp = CachedImp.shortest_path t src dst in
+                            times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
-  (List.length hosts, stop -. start)
+  (List.length hosts, stop -. start, !times)
 
-let imperative_dijkstra (t:Imp.t) : (int * float) =
+let imperative_dijkstra (t:Imp.t) : (int * float * int) =
   let hosts = Imp.fold_vertex (fun v acc -> match v with
       | Node.Host(_) -> v::acc
       | _ -> acc
     ) t [] in
+  let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _ = Imp.shortest_path t src dst in ()
+    if not (src = dst) then let _ = Imp.shortest_path t src dst in
+                            times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
-  (List.length hosts, stop -. start)
+  (List.length hosts, stop -. start,!times)
 
 let _ =
   Arg.parse arg_spec (fun fn -> infname := fn) usage ;
@@ -225,23 +233,27 @@ let _ =
     | Persistent ->
       Printf.printf "Running persistent version\n%!";
       let g = from_dotfile !infname in
-      let n, t = persistent_dijkstra g in
-      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t
+      let n, t, t' = persistent_dijkstra g in
+      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t;
+      Printf.printf "Shortest path was called %d times\n%!" t'
     | Imperative ->
       Printf.printf "Running imperative version\n%!";
       let g = from_dotfile !infname in
       let g' = Imp.make_from_persistent g in
-      let n, t = imperative_dijkstra g' in
-      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t
+      let n, t, t' = imperative_dijkstra g' in
+      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t;
+      Printf.printf "Shortest path was called %d times\n%!" t'
     | CachedPersistent ->
       Printf.printf "Running persistent version with cached node hashes\n%!";
       let g = from_dotfile !infname in
       let g' = CachedPers.make_from_persistent g in
-      let n, t = cached_persistent_dijkstra g' in
-      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t
+      let n, t, t' = cached_persistent_dijkstra g' in
+      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t;
+      Printf.printf "Shortest path was called %d times\n%!" t'
     | CachedImperative ->
       Printf.printf "Running imperative version with cached node hashes\n%!";
       let g = from_dotfile !infname in
       let g' = CachedImp.make_from_persistent g in
-      let n, t = cached_imperative_dijkstra g' in
-      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t
+      let n, t, t' = cached_imperative_dijkstra g' in
+      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t;
+      Printf.printf "Shortest path was called %d times\n%!" t'
