@@ -63,11 +63,14 @@ module CachedEdge = struct
 end
 
 let generic_sp t src dst len neighbors =
+  let start = Unix.gettimeofday () in
+  let distances = Hashtbl.create len in
   let visited = Hashtbl.create len in
   let previous =  Hashtbl.create len in
   let queue = Core.Std.Heap.create (fun (v,d) (v,d') -> compare d d') () in
   Core.Std.Heap.add queue (src,0);
 
+  let init = Unix.gettimeofday () in
   let rec mk_path current =
     if current = src then [src] else
       let prev = Hashtbl.find previous current in
@@ -80,18 +83,26 @@ let generic_sp t src dst len neighbors =
         if Hashtbl.mem visited next then ()
         else
           let next_dist = distance + 1 in
-          Hashtbl.replace previous next current;
-          Core.Std.Heap.add queue (next,next_dist)
+          let better =
+            try next_dist < (Hashtbl.find distances next) with Not_found -> true
+          in
+          if better then begin
+            Hashtbl.replace distances next next_dist;
+            Hashtbl.replace previous next current;
+            Core.Std.Heap.add queue (next,next_dist) end
       ) t current;
       Hashtbl.replace visited current 0;
       loop (Core.Std.Heap.pop_exn queue) end in
+
   loop (Core.Std.Heap.pop_exn queue);
-  mk_path dst
+  let find = Unix.gettimeofday () in
+  let p = mk_path dst in
+  let gather = Unix.gettimeofday () in
+  (init -. start, find -. init, gather -. find)
 
 module CachedPers = struct
-  module G = Persistent.Digraph.ConcreteBidirectionalLabeled(CachedNode)(CachedEdge)
+  module G = Persistent.Digraph.ConcreteLabeled(CachedNode)(CachedEdge)
   include G
-  (* module Dij = Path.Dijkstra(G)(Weight) *)
 
   let make_from_persistent p =
     let g = empty in
@@ -110,7 +121,7 @@ module CachedPers = struct
 end
 
 module CachedImp = struct
-  module G = Imperative.Digraph.ConcreteBidirectionalLabeled(CachedNode)(CachedEdge)
+  module G = Imperative.Digraph.ConcreteLabeled(CachedNode)(CachedEdge)
   include G
   (* module Dij = Path.Dijkstra(G)(Weight) *)
 
@@ -132,6 +143,7 @@ end
 
 module Pers = struct
   include Topology
+  let shortest_path t src dst = generic_sp t src dst (nb_vertex t) iter_succ
 end
 
 module Imp = struct
@@ -177,7 +189,7 @@ let persistent_dijkstra (t:Pers.t) : (int * float * int) =
   let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _ = Pers.shortest_path_v t src dst in
+    if not (src = dst) then let _ = Pers.shortest_path t src dst in
                             times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
@@ -192,26 +204,36 @@ let cached_persistent_dijkstra (t:CachedPers.t) : (int * float * int) =
   let times = ref 0 in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _Imp = CachedPers.shortest_path t src dst in
+    if not (src = dst) then let _ = CachedPers.shortest_path t src dst in
                             times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
   (List.length hosts, stop -. start, !times)
 
-let cached_imperative_dijkstra (t:CachedImp.t) : (int * float * int) =
+let cached_imperative_dijkstra (t:CachedImp.t)  =
   let open CachedNode in
   let hosts = CachedImp.fold_vertex (fun v acc -> match v with
       | {hash =  _; data = Node.Host(_)} -> v::acc
       | _ -> acc
     ) t [] in
-  let times = ref 0 in
+  let times = ref 0.0 in
+  let itimes = ref 0.0 in
+  let ftimes = ref 0.0 in
+  let gtimes = ref 0.0 in
+  let vert_num = CachedImp.nb_vertex t in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _Imp = CachedImp.shortest_path t src dst in
-                            times := !times +1
+    if not (src = dst) then
+      let each_start = Unix.gettimeofday () in
+      let i,f,g = generic_sp t src dst vert_num CachedImp.iter_succ in
+      let each_stop = Unix.gettimeofday () in
+      itimes := !itimes +. i;
+      ftimes := !ftimes +. f;
+      gtimes := !gtimes +. g;
+      times := !times +. (each_stop -. each_start)
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
-  (List.length hosts, stop -. start, !times)
+  (stop -. start, !itimes, !ftimes, !gtimes)
 
 let imperative_dijkstra (t:Imp.t) : (int * float * int) =
   let hosts = Imp.fold_vertex (fun v acc -> match v with
@@ -219,9 +241,10 @@ let imperative_dijkstra (t:Imp.t) : (int * float * int) =
       | _ -> acc
     ) t [] in
   let times = ref 0 in
+  let vert_num = Imp.nb_vertex t in
   let start = Unix.gettimeofday () in
   List.iter (fun src -> List.iter (fun dst ->
-    if not (src = dst) then let _ = Imp.shortest_path t src dst in
+    if not (src = dst) then let _ = generic_sp t src dst vert_num Imp.iter_succ in
                             times := !times +1
   ) hosts ) hosts;
   let stop = Unix.gettimeofday () in
@@ -254,6 +277,6 @@ let _ =
       Printf.printf "Running imperative version with cached node hashes\n%!";
       let g = from_dotfile !infname in
       let g' = CachedImp.make_from_persistent g in
-      let n, t, t' = cached_imperative_dijkstra g' in
-      Printf.printf "All-pairs shortest path between %d hosts took %f\n%!" n t;
-      Printf.printf "Shortest path was called %d times\n%!" t'
+      let total, i, f, g = cached_imperative_dijkstra g' in
+      Printf.printf "All-pairs shortest path %f\n%!" total;
+      Printf.printf "Init:%f Find:%f Gather:%f\n%!" i f g
