@@ -217,7 +217,7 @@ module EdgeMap = Map.Make(EdgeOrd)
 
 module Topology =
 struct
-  module G = Persistent.Digraph.ConcreteBidirectionalLabeled(Node)(Link)
+  module G = Persistent.Digraph.ConcreteLabeled(Node)(Link)
   include G
   module Dij = Path.Dijkstra(G)(Weight)
 
