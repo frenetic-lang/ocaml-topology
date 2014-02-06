@@ -5,6 +5,8 @@ open Topology
 type topoType =
   | Persistent
   | Imperative
+  | PersistentTbl
+  | ImperativeTbl
 
 let ttype = ref Persistent
 let infname = ref ""
@@ -52,7 +54,16 @@ module CachedEdge = struct
 
 end
 
+module PathKey = struct
+  type t = CachedNode.t * CachedNode.t
+  let equal (n1,n2) (n1',n2') =
+    CachedNode.equal n1 n1' && CachedNode.equal n2 n2'
+
+  let hash = Hashtbl.hash
+end
+
 module NodeTbl = Hashtbl.Make(CachedNode)
+module PathTbl = Hashtbl.Make(PathKey)
 
 module type CACHED = sig
   module G : Sig.G with type V.t = CachedNode.t
@@ -61,6 +72,42 @@ end
 
 module Make(C:CACHED) = struct
   include C
+
+  let shortest_path_tbl t src dst len path_tbl =
+    let start = Unix.gettimeofday () in
+    let distances = NodeTbl.create len in
+    let visited = NodeTbl.create len in
+    let queue = Core.Std.Heap.create (fun (v,d) (v,d') -> compare d d') () in
+
+    let init = Unix.gettimeofday () in
+    (* let rec mk_path current = *)
+    (*   if current = src then [src] else *)
+    (*     let prev = NodeTbl.find previous current in *)
+    (*     prev::(mk_path prev) in *)
+
+    let rec loop current =
+      if current = dst then [current]
+      else
+        try PathTbl.find path_tbl (current,dst)
+        with Not_found -> begin
+          NodeTbl.replace visited current 0;
+          G.iter_succ (fun next ->
+            if NodeTbl.mem visited next then () else
+            (* Assumes that all weights are 1 *)
+            let path = (loop next) in
+            let next_dist = List.length path in
+            Core.Std.Heap.add queue (path,next_dist)
+          ) t current;
+          match Core.Std.Heap.pop queue with
+            | Some (p,d) -> begin
+              PathTbl.replace path_tbl (current,dst) p;
+              current::p end
+            | None -> [current]
+        end in
+
+    let _ = loop src in
+    let find = Unix.gettimeofday () in
+    (init -. start, find -. init)
 
   let shortest_path t src dst len =
     let start = Unix.gettimeofday () in
@@ -125,6 +172,30 @@ module Make(C:CACHED) = struct
     let stop = Unix.gettimeofday () in
     (stop -. start, !itimes, !ftimes, !gtimes)
 
+  let all_pairs_tbl (t:G.t) : (float * float * float) =
+    let open CachedNode in
+    let hosts = G.fold_vertex (fun v acc -> match v with
+      | {hash =  _; data = Node.Host(_)} -> v::acc
+      | _ -> acc
+    ) t [] in
+    let times = ref 0.0 in
+    let itimes = ref 0.0 in
+    let ftimes = ref 0.0 in
+    let vert_num = G.nb_vertex t in
+    let tbl = PathTbl.create (vert_num * vert_num) in
+    let start = Unix.gettimeofday () in
+    List.iter (fun src -> List.iter (fun dst ->
+      if not (src = dst) then
+        let each_start = Unix.gettimeofday () in
+        let i,f = shortest_path_tbl t src dst vert_num tbl in
+        let each_stop = Unix.gettimeofday () in
+        itimes := !itimes +. i;
+        ftimes := !ftimes +. f;
+        times := !times +. (each_stop -. each_start)
+    ) hosts ) hosts;
+    let stop = Unix.gettimeofday () in
+    (stop -. start, !itimes, !ftimes)
+
 end
 
 module Persistent = Make(struct
@@ -169,6 +240,14 @@ let arg_spec =
       "-i",
       Arg.Unit (fun () -> ttype := Imperative),
       "\tUse an imperative topology implementation")
+    ; ("-pt",
+       Arg.Unit (fun () -> ttype := PersistentTbl),
+     "\tUse a persistent topology implementation with a memo table")
+    ; (
+      "-it",
+      Arg.Unit (fun () -> ttype := ImperativeTbl),
+      "\tUse an imperative topology implementation with a memo table")
+
     ; ("-o",
        Arg.String (fun s -> outfname := s ),
        "\tWrite topology to a file")
@@ -194,3 +273,17 @@ let _ =
       let total, i, f, g = Imperative.all_pairs g' in
       Printf.printf "All-pairs shortest path %f\n%!" total;
       Printf.printf "Init:%f Find:%f Gather:%f\n%!" i f g
+    | PersistentTbl ->
+      Printf.printf "Running persistent version with cached node hashes\n%!";
+      let g = from_dotfile !infname in
+      let g' = Persistent.make_from_topo g in
+      let total, i, f = Persistent.all_pairs_tbl g' in
+      Printf.printf "All-pairs shortest path %f\n%!" total;
+      Printf.printf "Init:%f Find:%f\n%!" i f
+    | ImperativeTbl ->
+      Printf.printf "Running imperative version with cached node hashes\n%!";
+      let g = from_dotfile !infname in
+      let g' = Imperative.make_from_topo g in
+      let total, i, f = Imperative.all_pairs_tbl g' in
+      Printf.printf "All-pairs shortest path %f\n%!" total;
+      Printf.printf "Init:%f Find:%f\n%!" i f
