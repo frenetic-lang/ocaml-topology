@@ -109,43 +109,158 @@ module Make(C:CACHED) = struct
     let find = Unix.gettimeofday () in
     (init -. start, find -. init)
 
-  let shortest_path t src dst len =
-    let start = Unix.gettimeofday () in
-    let distances = NodeTbl.create len in
-    let visited = NodeTbl.create len in
-    let previous =  NodeTbl.create len in
-    let queue = Core.Std.Heap.create (fun (v,d) (v,d') -> compare d d') () in
-    Core.Std.Heap.add queue (src,0);
+  (* let shortest_path t src dst len = *)
+  (*   let start = Unix.gettimeofday () in *)
+  (*   let distances = NodeTbl.create len in *)
+  (*   let visited = NodeTbl.create len in *)
+  (*   let previous =  NodeTbl.create len in *)
+  (*   let queue = Core.Std.Heap.create (fun (v,d) (v,d') -> compare d d') () in *)
+  (*   Core.Std.Heap.add queue (src,0); *)
 
-    let init = Unix.gettimeofday () in
-    let rec mk_path current =
-      if current = src then [src] else
-        let prev = NodeTbl.find previous current in
-        prev::(mk_path prev) in
+  (*   let init = Unix.gettimeofday () in *)
+  (*   let rec mk_path current = *)
+  (*     if current = src then [src] else *)
+  (*       let prev = NodeTbl.find previous current in *)
+  (*       prev::(mk_path prev) in *)
 
-    let rec loop (current,distance) =
-      if current = dst then ()
-      else begin
-        G.iter_succ (fun next ->
-          if NodeTbl.mem visited next then ()
-          else
-            let next_dist = distance + 1 in
-            let better =
-              try next_dist < (NodeTbl.find distances next) with Not_found -> true
+  (*   let rec loop (current,distance) = *)
+  (*     if current = dst then () *)
+  (*     else begin *)
+  (*       G.iter_succ (fun next -> *)
+  (*         if NodeTbl.mem visited next then () *)
+  (*         else *)
+  (*           let next_dist = distance + 1 in *)
+  (*           let better = *)
+  (*             try next_dist < (NodeTbl.find distances next) with Not_found -> true *)
+  (*           in *)
+  (*           if better then begin *)
+  (*             NodeTbl.replace distances next next_dist; *)
+  (*             NodeTbl.replace previous next current; *)
+  (*             Core.Std.Heap.add queue (next,next_dist) end *)
+  (*       ) t current; *)
+  (*       NodeTbl.replace visited current 0; *)
+  (*       loop (Core.Std.Heap.pop_exn queue) end in *)
+
+  (*   loop (Core.Std.Heap.pop_exn queue); *)
+  (*   let find = Unix.gettimeofday () in *)
+  (*   let _ = mk_path dst in *)
+  (*   let gather = Unix.gettimeofday () in *)
+  (*   (init -. start, find -. init, gather -. find) *)
+
+module Weight = struct
+  open CachedEdge
+  type t = Int64.t
+  type label = G.E.label
+  let weight l = 1L
+  let compare = Int64.compare
+  let add = Int64.add
+  let zero = Int64.zero
+end
+  module Dij = Path.Dijkstra(G)(Weight)
+  module BF = Path.BellmanFord(G)(Weight)
+
+  let floyd_warshall (g:G.t) : ((G.V.t * G.V.t) * G.V.t list) list =
+    let add_opt o1 o2 =
+      match o1, o2 with
+        | Some n1, Some n2 -> Some (Int64.add n1 n2)
+        | _ -> None in
+    let lt_opt o1 o2 =
+      match o1, o2 with
+        | Some n1, Some n2 -> n1 < n2
+        | Some _, None -> true
+        | None, Some _ -> false
+        | None, None -> false in
+    let get_vertices (g:G.t) : (G.V.t list) =
+        G.fold_vertex (fun v acc -> v::acc) g [] in
+    let make_matrix (g:G.t) =
+      let n = G.nb_vertex g in
+
+      let nodes = Array.of_list (get_vertices g) in
+      Array.init n
+        (fun i -> Array.init n
+          (fun j -> if i = j then (Some 0L, [nodes.(i)])
+            else
+              try
+                let l = G.find_edge g nodes.(i) nodes.(j) in
+                (Some 1L, [nodes.(i); nodes.(j)])
+            with Not_found ->
+              (None,[]))) in
+    let matrix = make_matrix g in
+    let n = G.nb_vertex g in
+    let dist i j = fst (matrix.(i).(j)) in
+    let path i j = snd (matrix.(i).(j)) in
+    for k = 0 to n - 1 do
+      for i = 0 to n - 1 do
+        for j = 0 to n - 1 do
+          let dist_ikj = add_opt (dist i k) (dist k j) in
+          if lt_opt dist_ikj (dist i j) then
+            matrix.(i).(j) <- (dist_ikj, path i k @ List.tl (path k j))
+        done
+      done
+    done;
+    let paths = ref [] in
+    let vxs = Array.of_list (get_vertices g) in
+    Array.iteri (fun i array ->
+      Array.iteri (fun j elt ->
+        let (_, p) = elt in
+        paths := ((vxs.(i),vxs.(j)),p) :: !paths) array;) matrix;
+    !paths
+
+  module H = Hashtbl.Make(G.V)
+  exception NegativeCycle of G.E.t list
+  let all_shortest_paths g vs =
+    let open G.E in
+    let dist = H.create 97 in
+    let prev = H.create 97 in
+    H.add dist vs Weight.zero;
+    let admissible = H.create 97 in
+    let build_cycle_from x0 =
+      let rec traverse_parent x ret =
+	let e = H.find admissible x in
+	let s = src e in
+	if G.V.equal s x0 then e :: ret else traverse_parent s (e :: ret)
+      in
+      traverse_parent x0 []
+    in
+    let find_cycle x0 =
+      let visited = H.create 97 in
+      let rec visit x =
+	if H.mem visited x then
+	  build_cycle_from x
+	else begin
+	  H.add visited x ();
+	  let e = H.find admissible x in
+	  visit (src e)
+	end
+      in
+      visit x0
+    in
+    let rec relax i =
+      let update = G.fold_edges_e
+        (fun e x ->
+          let ev1 = src e in
+          let ev2 = dst e in
+          try begin
+            let dev1 = H.find dist ev1 in
+            let dev2 = Weight.add dev1 (Weight.weight (label e)) in
+            let improvement =
+              try Weight.compare dev2 (H.find dist ev2) < 0
+              with Not_found -> true
             in
-            if better then begin
-              NodeTbl.replace distances next next_dist;
-              NodeTbl.replace previous next current;
-              Core.Std.Heap.add queue (next,next_dist) end
-        ) t current;
-        NodeTbl.replace visited current 0;
-        loop (Core.Std.Heap.pop_exn queue) end in
-
-    loop (Core.Std.Heap.pop_exn queue);
-    let find = Unix.gettimeofday () in
-    let _ = mk_path dst in
-    let gather = Unix.gettimeofday () in
-    (init -. start, find -. init, gather -. find)
+            if improvement then begin
+              H.replace prev ev2 ev1;
+              H.replace dist ev2 dev2;
+	          H.replace admissible ev2 e;
+              Some ev2
+            end else x
+          end with Not_found -> x) g None in
+      match update with
+      | Some x ->
+        if i == G.nb_vertex g then raise (NegativeCycle (find_cycle x))
+        else relax (i + 1)
+      | None -> dist,prev
+    in
+    relax 0
 
   let all_pairs (t:G.t) : (float * float * float * float) =
     let open CachedNode in
@@ -158,17 +273,27 @@ module Make(C:CACHED) = struct
     let ftimes = ref 0.0 in
     let gtimes = ref 0.0 in
     let vert_num = G.nb_vertex t in
+    Printf.printf "Number of vertices:%d\n%!" vert_num;
     let start = Unix.gettimeofday () in
-    List.iter (fun src -> List.iter (fun dst ->
-      if not (src = dst) then
-        let each_start = Unix.gettimeofday () in
-        let i,f,g = shortest_path t src dst vert_num in
-        let each_stop = Unix.gettimeofday () in
-        itimes := !itimes +. i;
-        ftimes := !ftimes +. f;
-        gtimes := !gtimes +. g;
-        times := !times +. (each_stop -. each_start)
-    ) hosts ) hosts;
+    List.iter (fun h ->
+      let each_start = Unix.gettimeofday () in
+      let _ = all_shortest_paths t h in
+      let each_stop = Unix.gettimeofday () in
+                           (* Printf.printf "%f\n%!" (each_stop -.each_start); *)
+                           ()) hosts;
+
+    (* List.iter (fun src -> List.iter (fun dst -> *)
+    (*   if not (src = dst) then *)
+    (*     let each_start = Unix.gettimeofday () in *)
+    (*     let _ = Dij.shortest_path t src dst in *)
+    (*     (\* let i,f,g = shortest_path t src dst vert_num in *\) *)
+    (*     let each_stop = Unix.gettimeofday () in *)
+    (*     Printf.printf "Iteration:%f\n%!" (each_stop -. each_start); *)
+    (*     (\* itimes := !itimes +. i; *\) *)
+    (*     (\* ftimes := !ftimes +. f; *\) *)
+    (*     (\* gtimes := !gtimes +. g; *\) *)
+    (*     times := !times +. (each_stop -. each_start) *)
+    (* ) hosts ) hosts; *)
     let stop = Unix.gettimeofday () in
     (stop -. start, !itimes, !ftimes, !gtimes)
 
