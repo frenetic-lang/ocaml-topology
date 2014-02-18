@@ -28,6 +28,16 @@ module EdgeMap = Map.Make(EdgeOrd)
 module G = Persistent.Digraph.ConcreteBidirectionalLabeled(Node)(Link)
 module V = G.V
 module E = G.E
+module Elt = struct
+  type t = Weight.t * G.V.t
+
+    (* weights are compared first, and minimal weights come first in the
+       queue *)
+  let compare (w1,v1) (w2,v2) =
+    let cw = Weight.compare w2 w1 in
+    if cw != 0 then cw else G.V.compare v1 v2
+end
+module Q = Heap.Imperative(Elt)
 module NH = NodeHash
 module Dij = Path.Dijkstra(G)(Weight)
 
@@ -358,7 +368,36 @@ let spanningtree ((g,t):t): G.t =
       done;
       !tree
 
-  (* Produce a dot representation of the topology, usable by Graphviz *)
+
+let spanning_tree_from ((g,t):t) (n:V.t) =
+  let spanningtree_from g r =
+    let visited = NH.create 97 in
+    let key = NH.create 97 in
+    let q = Q.create 17 in
+    Q.add q (Weight.zero, r);
+    while not (Q.is_empty q) do
+      let (w,u) = Q.pop_maximum q in
+      if not (NH.mem visited u) then begin
+	NH.add visited u ();
+	G.iter_succ_e (fun e ->
+	  let v = Link.dst e in
+	  if not (NH.mem visited v) then begin
+	    let wuv = Weight.weight (Link.label e) in
+	    let improvement =
+              try Weight.compare wuv (fst (NH.find key v)) < 0
+              with Not_found -> true
+            in
+            if improvement then begin
+              NH.replace key v (wuv, e);
+              Q.add q (wuv, v)
+            end;
+	  end) g u
+      end
+    done;
+    NH.fold (fun _ (_, e) acc -> e :: acc) key [] in
+  spanningtree_from g n
+
+(* Produce a dot representation of the topology, usable by Graphviz *)
 let to_dot ((g,t):t) =
   let edges = get_edges (g,t) in
   let es = list_intercalate (fun l -> Link.to_dot l t) "\n" edges in
