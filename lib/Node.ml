@@ -31,7 +31,7 @@ type t = node_record
 
 type label = t
 
-
+let blank = {hash = None; visited = false ; id = -1}
 let create i = { hash = Some (Hashtbl.hash i) ; visited = false; id = i}
 
 let compare = Pervasives.compare

@@ -28,6 +28,7 @@ module NodeHash : Hashtbl.S with type key = t
 
 type attr_tbl = attributes NodeHash.t
 
+val blank : t
 val create : int -> t
 val hash : t -> int
 val equal : t -> t -> bool
