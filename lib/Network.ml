@@ -57,6 +57,9 @@ let add_edge_e ((g,t):t) ((s,l,d):E.t) : t =
 
 let iter_succ f ((g,t):t) n = G.iter_succ f g n
 
+let iter_vertex f ((g,t):t) = G.iter_vertex f g
+let iter_edges f ((g,t):t) = G.iter_edges f g
+
 let fold_edges_e f (g,t) acc = G.fold_edges_e f g acc
 
 let find_edge (g,t) s d = G.find_edge g s d

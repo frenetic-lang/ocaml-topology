@@ -28,6 +28,9 @@ val find_edge : t -> V.t -> V.t -> E.t
 
 (* Iterators *)
 val iter_succ : (V.t -> unit) -> t -> V.t -> unit
+val iter_vertex : (V.t -> unit) -> t -> unit
+val iter_edges : (V.t -> V.t -> unit) -> t -> unit
+val iter_succ : (V.t -> unit) -> t -> V.t -> unit
 val fold_edges_e : (E.t -> 'a -> 'a) -> t -> 'a -> 'a
 
 (* Utility functions *)
