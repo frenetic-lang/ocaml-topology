@@ -33,6 +33,7 @@ val create : int -> t
 val hash : t -> int
 val equal : t -> t -> bool
 val compare : t -> t -> int
+val to_id : t -> int
 val to_dot : t -> attr_tbl -> string
 val to_string : t -> attr_tbl ->  string
 val visited : t -> bool

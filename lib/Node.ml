@@ -53,6 +53,9 @@ end)
 
 type attr_tbl = attributes NodeHash.t
 
+
+let to_id n = n.id
+
 let to_dot n idtbl = let attr = NodeHash.find idtbl n in attr.name
 
 let to_string = to_dot
