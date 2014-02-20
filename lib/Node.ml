@@ -53,9 +53,13 @@ end)
 
 type attr_tbl = attributes NodeHash.t
 
-let to_dot n idtbl = let attr = NodeHash.find idtbl n in attr.name
+let to_dot n idtbl =
+  try
+    let attr = NodeHash.find idtbl n in attr.name
+  with Not_found -> Printf.sprintf "|%d|" n.id
 
 let to_string = to_dot
+let to_id n = n.id
 
 let id_of_switch n idtbl = let attr = NodeHash.find idtbl n in attr.dev_id
 
