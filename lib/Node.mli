@@ -25,6 +25,7 @@ type t
 type label = t
 
 module NodeHash : Hashtbl.S with type key = t
+module NodeSet : Set.S with type elt = t
 
 type attr_tbl = attributes NodeHash.t
 

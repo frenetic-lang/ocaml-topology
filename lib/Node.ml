@@ -51,14 +51,18 @@ module NodeHash = Hashtbl.Make(struct
   let equal = equal
 end)
 
+module NodeSet = Set.Make(struct
+  type t = node_record
+  let compare = compare
+end)
 type attr_tbl = attributes NodeHash.t
-
 
 let to_id n = n.id
 
 let to_dot n idtbl = let attr = NodeHash.find idtbl n in attr.name
 
 let to_string = to_dot
+let to_id n = n.id
 
 let id_of_switch n idtbl = let attr = NodeHash.find idtbl n in attr.dev_id
 
