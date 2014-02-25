@@ -13,11 +13,11 @@ Library topology
   BuildDepends:
     packet,
     ocamlgraph,
-    threads
+    threads,
+    yojson
   Modules:
     Network,
     Network_Common
-
 
 Executable topotool
   Path: exe

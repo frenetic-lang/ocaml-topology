@@ -202,6 +202,35 @@ module Node = struct
 
   let parse_gml (vs:Gml.value_list) : t =
     List.fold_left update_gml_attr default vs
+
+  let to_json n = match n.dev_type with
+    | Switch -> 
+      `Assoc [("type", `String "switch");
+              ("id", `String (Int64.to_string n.dev_id))]
+    | Host ->
+      `Assoc [("type", `String "host");
+              ("mac", `String (Packet.string_of_mac n.mac));
+              ("ip", `String (Packet.string_of_ip n.ip))]
+    | _ -> 
+      raise (Network.Parse_error "Node.to_json: can't render")
+
+  let from_json json = match json with
+    | `Assoc [("type", `String "switch");
+              ("id", `String sw_id)] ->
+      { default with 
+        dev_type = Switch;
+        dev_id = (Int64.of_string sw_id) }
+    | `Assoc [("type", `String "host");
+              ("mac", `String dlAddr);
+              ("ip", `String nwAddr)] ->
+      let mac = Packet.mac_of_string dlAddr in 
+      { default with
+        dev_type = Host;
+        dev_id = mac;
+        mac = mac;
+        ip = Packet.ip_of_string nwAddr }
+    | _ -> 
+      raise (Network.Parse_error "Node.from_json: can't parse")
 end
 
 module Link = struct
@@ -249,6 +278,9 @@ module Link = struct
   let parse_gml (vs:Gml.value_list) : t =
     let link = List.fold_left update_gml_attr default vs in
     link
+
+  let to_json _ = `String "()"
+  let from_json _ = default
 end
 
 module Weight = struct
