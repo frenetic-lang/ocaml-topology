@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: e00b7180b701ea036c5a569a717555b1)
+# DO NOT EDIT (digest: d379a7f0192a2ab4f92008c0edefb077)
 # Ignore VCS directories, you can use the same kind of rule outside
 # OASIS_START/STOP if you want to exclude directories that contains
 # useless stuff for the build process
@@ -17,4 +17,5 @@
 "lib/topology.cmxs": use_topology
 <lib/*.ml{,i}>: package(ocamlgraph)
 <lib/*.ml{,i}>: package(threads)
+<lib/*.ml{,i}>: package(yojson)
 # OASIS_STOP

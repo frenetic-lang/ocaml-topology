@@ -3,19 +3,27 @@ module type VERTEX = sig
 
   val compare : t -> t -> int
   val to_string : t -> string
+
   val parse_dot : Graph.Dot_ast.node_id -> Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
+  val to_json : t -> Yojson.Safe.json
+  val from_json : Yojson.Safe.json -> t
 end
 
 module type EDGE = sig
   type t
 
+  val default : t
   val compare : t -> t -> int
   val to_string : t -> string
+
   val parse_dot : Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
-  val default : t
+  val to_json : t -> Yojson.Safe.json
+  val from_json : Yojson.Safe.json -> t
 end
+
+exception Parse_error of string
 
 module type NETWORK = sig
   module Topology : sig
@@ -87,12 +95,16 @@ module type NETWORK = sig
   module Parse : sig
     val from_dotfile : string -> Topology.t
     val from_gmlfile : string -> Topology.t
+
+    val from_json : string -> Topology.t
   end
 
   (* Pretty Printing *)
   module Pretty : sig
     val to_string : Topology.t -> string
     val to_dot : Topology.t -> string
+
+    val to_json : Topology.t -> string
   end
 end
 
@@ -427,6 +439,33 @@ struct
       
     let from_dotfile = Dot.parse
     let from_gmlfile = Gml.parse
+
+    let from_json str =
+      match Yojson.Safe.from_string str with
+        | `Assoc [("nodes", `List ns); ("links", `List es)] ->
+          let t, nm = List.fold_left (fun (t, nm) n -> match n with
+              | `Assoc [("id", `Int id); ("label", l)] ->
+                let l = Vertex.from_json l in
+                let t, v = Topology.add_vertex t l in
+                (t, PortMap.add (Int32.of_int id) v nm)
+              | _ -> raise (Parse_error "Cannot parse node"))
+            (Topology.empty (), PortMap.empty) ns in
+          List.fold_left (fun t e -> match e with
+            | `Assoc [("src_id",    `Int v_src);
+                      ("src_port",  `Int p_src);
+                      ("label",     l);
+                      ("dst_id",    `Int v_dst);
+                      ("dst_port",  `Int p_dst)] ->
+              let l = Edge.from_json l in
+              let p_src = Int32.of_int p_src in
+              let p_dst = Int32.of_int p_dst in
+              let v_src = PortMap.find (Int32.of_int v_src) nm in
+              let v_dst = PortMap.find (Int32.of_int v_dst) nm in
+              let t, e = Topology.add_edge t v_src p_src l v_dst p_dst in
+              t
+            | _ -> raise (Parse_error "Cannot parse edge"))
+            t es
+        | _ -> raise (Parse_error "Cannot parse topology")
   end
 
   (* Pretty Printing *)
@@ -446,5 +485,20 @@ struct
         
     let to_string (t:t) : string = 
       to_dot t
+
+    let to_json (t:t) : string =
+      let vs = `Assoc (VertexSet.fold (fun v acc ->
+        (string_of_int v.VL.id, Vertex.to_json v.VL.label)::acc
+      ) (vertexes t) []) in
+      let es = `List (EdgeSet.fold (fun e acc ->
+        let (v_src, l, v_dst) = e in
+        `Assoc [("src_id",      `Int v_src.VL.id);
+                ("src_port",    `Int (Int32.to_int l.EL.src));
+                ("label",       Edge.to_json l.EL.label);
+                ("dst_id",      `Int v_dst.VL.id);
+                ("dst_port",    `Int (Int32.to_int l.EL.dst))]::acc)
+        (edges t) []) in
+      let json = `Assoc [("nodes", vs); ("links", es)] in
+      Yojson.Safe.to_string json
   end      
 end
