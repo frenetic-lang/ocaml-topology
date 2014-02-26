@@ -12,6 +12,7 @@ val add_node : t -> V.t -> t
 val add_host : t -> string -> Packet.dlAddr -> Packet.nwAddr -> int -> t
 val add_switch : t -> Node.switchId -> int -> t
 val add_switch_edge : t -> V.t -> Node.portId -> V.t -> Node.portId -> t
+val add_edge : t -> V.t -> V.t -> t
 val add_edge_e : t -> E.t -> t
 
 (* Accessors *)

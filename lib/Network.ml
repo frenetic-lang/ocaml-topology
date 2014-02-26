@@ -51,6 +51,10 @@ type t = G.t * attr_tbl
 let empty () : t =
   (G.empty, NH.create 1)
 
+let add_edge ((g,t):t) (src:V.t) (dst:V.t) : t =
+  let g' = G.add_edge g src dst in
+  (g',t)
+
 let add_edge_e ((g,t):t) ((s,l,d):E.t) : t =
   let g' = G.add_edge_e g (s,l,d) in
   (g',t)
