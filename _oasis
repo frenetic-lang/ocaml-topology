@@ -13,6 +13,7 @@ Library topology
   Path: lib
   BuildDepends:
     ocamlgraph,
-    threads
+    threads,
+    yojson
   Modules:
     Network

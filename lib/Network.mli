@@ -3,19 +3,27 @@ module type VERTEX = sig
 
   val compare : t -> t -> int
   val to_string : t -> string
+
   val parse_dot : Graph.Dot_ast.node_id -> Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
+  val to_json : t -> Yojson.Safe.json
+  val from_json : Yojson.Safe.json -> t
 end
 
 module type EDGE = sig
   type t
 
+  val default : t
   val compare : t -> t -> int
   val to_string : t -> string
+
   val parse_dot : Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
-  val default : t
+  val to_json : t -> Yojson.Safe.json
+  val from_json : Yojson.Safe.json -> t
 end
+
+exception Parse_error of string
 
 module type NETWORK = sig
   module Topology : sig
@@ -87,12 +95,16 @@ module type NETWORK = sig
   module Parse : sig
     val from_dotfile : string -> Topology.t
     val from_gmlfile : string -> Topology.t
+
+    val from_json : string -> Topology.t
   end
 
   (* Pretty Printing *)
   module Pretty : sig
     val to_string : Topology.t -> string
     val to_dot : Topology.t -> string
+
+    val to_json : Topology.t -> string
   end
 end
 
