@@ -3,6 +3,7 @@ module type VERTEX = sig
 
   val compare : t -> t -> int
   val to_string : t -> string
+  val to_dot : t -> string
   val parse_dot : Graph.Dot_ast.node_id -> Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
 end
@@ -12,6 +13,7 @@ module type EDGE = sig
 
   val compare : t -> t -> int
   val to_string : t -> string
+  val to_dot : t -> string
   val parse_dot : Graph.Dot_ast.attr list -> t
   val parse_gml : Graph.Gml.value_list -> t
   val default : t
@@ -23,20 +25,23 @@ module type NETWORK = sig
 
     type vertex
     type edge
-    type port = int32
+    type port = int64
 
     module Vertex : VERTEX
     module Edge : EDGE
 
     module EdgeSet : Set.S
       with type elt = edge
-      
+
     module VertexSet : Set.S
       with type elt = vertex
-      
+
+    module VertexHash : Hashtbl.S
+      with type key = vertex
+
     module PortSet : Set.S
       with type elt = port
-    
+
     (* Constructors *)
     val copy : t -> t
     val empty : unit -> t
@@ -44,9 +49,12 @@ module type NETWORK = sig
     val add_edge : t -> vertex -> port -> Edge.t -> vertex -> port -> (t * edge)
 
     (* Special Accessors *)
+    val num_vertexes : t -> int
+    val num_edges : t -> int
     val vertexes : t -> VertexSet.t
     val edges : t -> EdgeSet.t
     val neighbors : t -> vertex -> VertexSet.t
+    val find_edge : t -> vertex -> vertex -> edge
     val vertex_to_ports : t -> vertex -> PortSet.t
     val next_hop : t -> vertex -> port -> edge option
     val edge_src : edge -> (vertex * port)
@@ -79,8 +87,12 @@ module type NETWORK = sig
   (* Paths *)
   module Path : sig
     type t = Topology.edge list
+    exception NegativeCycle of t
 
     val shortest_path : Topology.t -> Topology.vertex -> Topology.vertex -> t option
+    val all_shortest_paths : Topology.t -> Topology.vertex -> Topology.vertex Topology.VertexHash.t
+    val all_pairs_shortest_paths : Topology.t
+      -> (Topology.vertex * Topology.vertex * Topology.vertex list) list
   end
 
   (* Parsing *)
@@ -98,6 +110,8 @@ end
 
 module type MAKE = functor (Vertex:VERTEX) -> functor (Edge:EDGE) -> NETWORK
   with module Topology.Vertex = Vertex
-   and module Topology.Edge = Edge
+  and module Topology.Edge = Edge
 
+
+(* Concrete instantations of above functors and module signatures *)
 module Make : MAKE
