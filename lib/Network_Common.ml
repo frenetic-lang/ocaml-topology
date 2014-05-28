@@ -193,4 +193,4 @@ module Weight = struct
 end
       
 module Net = Network.Make(Node)(Link)
-module Path = Net.Path(Weight)
+module NetPath = Net.Path(Weight)
