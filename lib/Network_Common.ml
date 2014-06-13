@@ -111,10 +111,23 @@ module Node = struct
       | Dot_ast.Ident("mac") -> {n with mac = mac_of vo}
       | _ -> failwith "Unknown node attribute\n"
 
+  let fresh_num_cell = ref 1000
+  let fresh_name_tbl = Hashtbl.create 1000
+  let fresh_num nm = 
+    try Hashtbl.find fresh_name_tbl nm 
+    with Not_found -> 
+      let ret = !fresh_num_cell in 
+      fresh_num_cell := ret; 
+      Hashtbl.replace fresh_name_tbl nm ret;
+      ret
+    
+
   let parse_dot (i:Dot_ast.node_id) (ats:Dot_ast.attr list) : t =
     let (id, popt) = i in
     let name = string_of_id id in
-    let num = int_of_string (String.sub name 1 (String.length name - 1)) in 
+    let num = try int_of_string (String.sub name 1 (String.length name - 1)) with Failure _ -> 
+      Printf.eprintf "Could not make num of name: %s\n" name; fresh_num name
+    in 
     let at = List.hd ats in
     List.fold_left update_dot_attr
       {default with name = name; ip = Int32.of_int num; mac = Int64.of_int num} at
