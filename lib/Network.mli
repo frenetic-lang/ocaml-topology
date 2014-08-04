@@ -1,5 +1,5 @@
 module type VERTEX = sig
-  type t
+  type t with sexp
 
   val compare : t -> t -> int
   val to_string : t -> string
@@ -10,7 +10,7 @@ module type VERTEX = sig
 end
 
 module type EDGE = sig
-  type t
+  type t with sexp
 
   val compare : t -> t -> int
   val to_string : t -> string

@@ -1,5 +1,6 @@
 open Graph
 open Network
+open Sexplib.Std
 
 (* Utility functions *)
 let parse_rate (r:string) : Int64.t =
@@ -47,13 +48,13 @@ let capacity_of_id vo = match maybe vo with
   | _ -> failwith "Need a string to get capacity\n"
 
 module Node = struct
-  type device = Switch | Host | Middlebox
+  type device = Switch | Host | Middlebox with sexp
 
   type t = { dev_type : device ;
              dev_id : int64 ;
              ip : int32 ;
              mac : int64 ;
-             name : string }
+             name : string } with sexp
 
   type partial_t = { partial_dev_type : device option ;
                      partial_dev_id : int64 option ;
@@ -207,7 +208,7 @@ end
 module Link = struct
   type t = { cost : int64 ;
              capacity : int64 ;
-             mutable weight : float }
+             mutable weight : float } with sexp
 
   let default = { cost = 1L;
                   capacity = Int64.max_int;

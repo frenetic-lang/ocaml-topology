@@ -1,5 +1,7 @@
+open Sexplib.Std
+
 module type VERTEX = sig
-  type t
+  type t with sexp
 
   val compare : t -> t -> int
   val to_string : t -> string
@@ -10,7 +12,7 @@ module type VERTEX = sig
 end
 
 module type EDGE = sig
-  type t
+  type t with sexp
 
   val compare : t -> t -> int
   val to_string : t -> string
@@ -145,7 +147,8 @@ module Make : MAKE =
     functor (Edge:EDGE) ->
 struct
   module Topology = struct
-    type port = int32
+    type port = int32 with sexp
+    type id = int with sexp
     module PortSet = Set.Make(Int32)
     module PortMap = Map.Make(Int32)
 
@@ -154,8 +157,8 @@ struct
 
     module VL = struct
       type t =
-          { id : int;
-            label : Vertex.t }
+          { id : id;
+            label : Vertex.t } with sexp
       let compare n1 n2 = Pervasives.compare n1.id n2.id
       let hash n1 = Hashtbl.hash n1.id
       let equal n1 n2 = n1.id = n2.id
@@ -166,10 +169,10 @@ struct
     module VertexHash = Hashtbl.Make(VL)
 
     module EL = struct
-      type t = { id : int;
+      type t = { id : id;
                  label : Edge.t;
                  src : port;
-                 dst : port }
+                 dst : port } with sexp
       let compare e1 e2 = Pervasives.compare e1.id e2.id
       let hash e1 = Hashtbl.hash e1.id
       let equal e1 e2 = e1.id = e2.id
@@ -191,7 +194,7 @@ struct
     end
 
     module EdgeSet = Set.Make(struct
-      type t = VL.t * EL.t * VL.t
+      type t = VL.t * EL.t * VL.t with sexp
       let compare (e1:t) (e2:t) : int =
         let (_,l1,_) = e1 in
         let (_,l2,_) = e2 in
