@@ -168,7 +168,7 @@ struct
       let compare n1 n2 = Pervasives.compare n1.id n2.id
       let hash n1 = Hashtbl.hash n1.id
       let equal n1 n2 = n1.id = n2.id
-      let to_string n = string_of_int n.id
+      let to_string n = Vertex.to_string n.label
     end
     module VertexSet = Set.Make(VL)
     module VertexMap = Map.Make(Vertex)
@@ -182,7 +182,8 @@ struct
       let compare e1 e2 = Pervasives.compare e1.id e2.id
       let hash e1 = Hashtbl.hash e1.id
       let equal e1 e2 = e1.id = e2.id
-      let to_string e = string_of_int e.id
+      let to_string e = Printf.sprintf "[src_port=%ld, dst_port=%ld, %s]"
+        e.src e.dst (Edge.to_string e.label)
       let default =
         { id = 0;
           label = Edge.default;
@@ -313,8 +314,11 @@ struct
       l.EL.label
 
     let edge_to_string (t:t) (e:edge) : string =
-      let (_,e,_) = e in
-      EL.to_string e
+      let (s,e,d) = e in
+      Printf.sprintf "%s -> %s %s;"
+        (VL.to_string s)
+        (VL.to_string d)
+        (EL.to_string e)
 
     let edge_src (e:edge) : (vertex * port) =
       let (v1,l,_) = e in
@@ -750,7 +754,7 @@ struct
       let es = (EdgeSet.fold (edges t) ~init:"" ~f:(fun acc (s,l,d) ->
         let _,src_port = edge_src (s,l,d) in
         let _,dst_port = edge_dst (s,l,d) in
-        Printf.sprintf "%s%s%s -> %s {src_port=%lu; dst_port=%lu; %s};"
+        Printf.sprintf "%s%s%s -- %s [src_port=%lu; dst_port=%lu; %s];"
           acc
           (if acc = "" then "" else "\n")
           (Vertex.to_string s.VL.label)
@@ -759,12 +763,12 @@ struct
           dst_port
           (Edge.to_dot l.EL.label))) in
       let vs = (VertexSet.fold (vertexes t) ~init:"" ~f:(fun acc v ->
-        Printf.sprintf "%s%s\n%s;"
+        Printf.sprintf "%s%s%s;"
           acc
           (if acc = "" then "" else "\n")
           (Vertex.to_dot v.VL.label)
       )) in
-      Printf.sprintf "digraph G {\n%s\n%s\n}\n" vs es
+      Printf.sprintf "digraph G {\n%s\n\n%s\n}\n" vs es
 
     let to_string (t:t) : string =
       to_dot t
