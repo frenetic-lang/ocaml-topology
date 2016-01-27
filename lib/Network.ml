@@ -754,7 +754,7 @@ struct
       let es = (EdgeSet.fold (edges t) ~init:"" ~f:(fun acc (s,l,d) ->
         let _,src_port = edge_src (s,l,d) in
         let _,dst_port = edge_dst (s,l,d) in
-        Printf.sprintf "%s%s%s -- %s [src_port=%lu; dst_port=%lu; %s];"
+        Printf.sprintf "%s%s%s -> %s [src_port=%lu; dst_port=%lu; %s];"
           acc
           (if acc = "" then "" else "\n")
           (Vertex.to_string s.VL.label)
