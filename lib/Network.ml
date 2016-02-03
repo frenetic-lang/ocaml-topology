@@ -142,6 +142,7 @@ module type NETWORK = sig
     val to_dot : Topology.t -> string
     val to_mininet : ?prologue_file:string -> ?epilogue_file:string ->
       Topology.t -> string
+    val to_netkat : Topology.t -> string -> string
   end
 end
 
@@ -826,6 +827,33 @@ struct
         t "" in
       prologue ^ add_hosts ^ links ^ epilogue
 
+    let to_netkat (t:Topology.t) (arrow:string) : string =
+      let get_id name =
+        let regexp = Str.regexp "\\([A-Za-z]+\\)\\([0-9]+\\)" in
+        let _ = Str.string_match regexp name 0 in
+        Str.matched_group 2 name in
+      let num_edges = num_edges t in
+      let size = num_edges * 10 in
+      let buffer = Buffer.create size in
+      let _ = fold_edges (fun e i ->
+        let src_vertex,src_port = edge_src e in
+        let dst_vertex,dst_port = edge_dst e in
+        let src_label = vertex_to_label t src_vertex in
+        let dst_label = vertex_to_label t dst_vertex in
+        let src = Vertex.to_string src_label in
+        let dst = Vertex.to_string dst_label in
+        Buffer.add_string buffer (get_id src);
+        Buffer.add_char buffer '@';
+        Buffer.add_string buffer (Int32.to_string src_port);
+        Buffer.add_string buffer arrow;
+        Buffer.add_string buffer (get_id dst);
+        Buffer.add_char buffer '@';
+        Buffer.add_string buffer (Int32.to_string dst_port);
+        if (i = num_edges - 1) then Buffer.add_string buffer "\n"
+        else Buffer.add_string buffer " | \n";
+        i + 1
+      ) t 0 in
+      Buffer.contents buffer
   end
 end
 

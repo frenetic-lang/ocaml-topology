@@ -141,6 +141,10 @@ module type NETWORK = sig
     val to_dot : Topology.t -> string
     val to_mininet : ?prologue_file:string -> ?epilogue_file:string ->
       Topology.t -> string
+
+    (* This should ideally create a NetKAT policy type, but that would create
+    an awkward circular dependency *)
+    val to_netkat : Topology.t -> string -> string
   end
 end
 
